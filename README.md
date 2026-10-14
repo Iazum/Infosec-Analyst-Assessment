@@ -103,18 +103,22 @@ Phase 0
 2. Billing alarm: 
 
 Phase 1: Design Decisions
-Decision                  Recommended Choice                          Reason to state
-API type                  REST API                                    WAF attaches directly to REST stages
-Auth                      Cognito User Pool                           Managed, OIDC compliance, no custom code
-Database                  DynamoDB(KMS encrypted)                     Serverless, IAM controlled, reachable through vpc endpoint
-Compute                   Lambda in private subnet                    No public exposure, no servers to patch
-LLM                       Amazon Bedrock (via VPC endpoint)           Traffic never leaves AWS network
-Outbound proxy            Dedicated LLM gateway layer                 Central place for redaction, loggin, quotas and key custody
+| Decision               |   Recommended Choice                      |    Reason to state |
+| --- | --- | --- |
+| API type         |         REST API      |                              WAF attaches directly to REST stages |
+| Auth              |        Cognito User Pool |                           Managed, OIDC compliance, no custom code |
+| Database          |        DynamoDB(KMS encrypted)                  |   Serverless, IAM controlled, reachable through vpc endpoint |
+| Compute          |         Lambda in private subnet                  |  No public exposure, no servers to patch
+|  LLM            |           Amazon Bedrock (via VPC endpoint)        |   Traffic never leaves AWS network |
+| Outbound proxy |           Dedicated LLM gateway layer               |  Central place for redaction, loggin, quotas and key custody |
 
 
 Phase 2: Building the network foundation
+
 Step 1: Create the VPC
+
 Console → VPC → Create VPC → Choose VPC and more
+
   Name: sec-gw
   IPv4 CIDR: 10.0.0.0/16
   Availability Zones: 2
@@ -125,7 +129,9 @@ Console → VPC → Create VPC → Choose VPC and more
 
 
 Step 2: Add the DynamoDB gateway endpoint
+
 VPC → Endpoints → Create endpoint
+
   Service: com.amazonaws.<us-east-1>.dynamodb (type Gateway)
   VPC: sec-gw-vpc
   Route tables: both private route tables
@@ -135,9 +141,10 @@ This lets a lambda in a private subnet reach DynamoDB without   NAT
 Step 3: Create the security groups
 VPC → Security groups → Create
 
-Name                    Inbound                            Outbound
-sec-gw-lambda-sg           none                            TCP 443 to sec-gw-endpoint-sg, plus TCP 443 to the DynamoDB prefix list
-sec-gw-endpoint-sg      TCP 443 from sec-gw-lambda-sg      default
+| Name |                   Inbound    |                        Outbound |
+| --- | --- | --- |
+| sec-gw-lambda-sg            | none             |               TCP 443 to sec-gw-endpoint-sg, plus TCP 443 to the DynamoDB prefix list |
+| sec-gw-endpoint-sg      | TCP 443 from sec-gw-lambda-sg  |    default |
 
 
 The DynamoDB prefix list appears in the destination dropdown as the gateway endpoint exists
@@ -165,9 +172,10 @@ Step 1 DYNAMODB TABLES
 
 Console → DynamoDB → Create table ( two tables with on demand capacity)
 
-Table        Partition Key      Sort Key            Purpose
-Orders       userId(String)     OrderID (string)    Orders API data
-LlmUsage     userId (string)    day (String)        Per user daily AI quota counters
+| Table |        Partition Key    |  Sort Key        |    Purpose |
+| --- | --- | --- |
+| Orders    |   userId(String)   |  OrderID (string)   | Orders API data |
+| LlmUsage  |   userId (string)  |  day (String)     |   Per user daily AI quota counters |
 
 
 For both tables, KMS encryption is enabled as AWS managed key. On Orders table, Point in time recovery is enabled
@@ -184,22 +192,28 @@ Step 3 LAMBDA FUNCTIONS
 
 Console → Lambda → Create function → Author from scratch, Python3.12 3 functions are created with their codes
 
-Function            Code file                                 Role                      Timeout        Environment variables
-sec-gw-orders       apis/orders/lambda_function.py            sec-gw-orders-role          10s          TABLE_NAME=Orders
-sec-gw-llm-gateway  apis/llm_gateway/lambda_function.py      sec-gw-llm-gateway-role      20s          USAGE_TABLE=LlmUsage, DAILY_LIMIT=20, MODEL_ID=zai.glm-5.3, MOCK_LLM=false
-sec-gw-summarize    apis/summarize/lambda_function.py        sec-gw-summarize-role        25s          LLM_GATEWAY_FUNCTION=sec-gw-llm-gateway
+| Function       |     Code file                 |                Role             |         Timeout    |    Environment variables |
+| --- | --- | --- | --- | --- | 
+| sec-gw-orders    |   apis/orders/lambda_function.py   |         sec-gw-orders-role    |      10s      |    TABLE_NAME=Orders |
+| sec-gw-llm-gateway   | apis/llm_gateway/lambda_function.py    |  sec-gw-llm-gateway-role  |    20s        |  USAGE_TABLE=LlmUsage, DAILY_LIMIT=20, MODEL_ID=zai.glm-5.3, MOCK_LLM=false |
+| sec-gw-summarize |   apis/summarize/lambda_function.py    |    sec-gw-summarize-role    |    25s       |   LLM_GATEWAY_FUNCTION=sec-gw-llm-gateway |
 
 Bedrock model: a text model is picked (zai.glm-5.3) and a quick test is done
 
 Step 4: COGNITO USER POOL
 
-Console → Cognito → Create user pool
+Console → Cognito → Create user pool 
+
   Sign in identifier: Email
+  
   Password policy: Cognito defaults (min 8, mixed character types)
   MFA: 
   Self registration: Disabled( admin creates users)
+  
   App client: Public client, no client secret, name sec-gw-client
+  
   Authentication flows: ALLOW_USER_PASSWORD_AUTH and ALLOW_REFRESH_TOKEN_AUTH (enabled)
+  
   Token expiry: ID /access token 60 minutes
 
 
@@ -215,11 +229,12 @@ Request validators and models (Create validator name body-validator)
 Resources and methods. Resource tree below is created with matching function and Method request set: Authorization = Cognito authorizer, API Key required = true
 
 
-Resource            Method      Lambda            Model
-/orders              GET         sec-gw-orders      none
-/orders              POST        sec-gw-orders      OrderInput
-/orders/{orderId}    GET         sec-gw-orders      none
-/ai/summarize        POST        sec-gw-summarize    SummarizeInput
+| Resource  |           Method   |   Lambda  |          Model |
+| --- | --- | --- |  --- | 
+| /orders       |       GET      |   sec-gw-orders   |   none |
+| /orders        |      POST     |   sec-gw-orders   |   OrderInput |
+| /orders/{orderId}   | GET      |   sec-gw-orders   |   none |
+| /ai/summarize       |  POST    |    sec-gw-summarize  |  SummarizeInput |
 
 CORS is not enabled
 
@@ -241,23 +256,29 @@ API Gateway → Usage plans → create usage plan sec-gw-standard
 Stage 7 : AWS WAF
 
 Console → WAF & Shield → Web ACLs → Create a Web ACL
+
   Resource type: Regional, same reqion as the API
+  
   Associate to sec-gw-api → stage prod
+  
   Default action: Allow
+  
   Rules ( as below)
 
-  Priority      Rule                                  Notes
-  0              RateLimitPerIp(rate based            Limits 100 per 5 minutes, aggregate by source IP, actino BLOCK
-  1            AWSManagedRulesAmazonIPReputationList  Block known bad sources
-  2            AWSManagedRulesCommonRuleSet            XSS, bad bots, size limits
-  3            AWSManagedRulesKnownBadInputsRuleSet    Log4j and similar
-  4            AWSManagedRulesSQLiRuleSet               SQL injection
+ | Priority    |  Rule              |                    Notes |
+ | --- | --- | --- |
+ | 0        |      RateLimitPerIp(rate based        |    Limits 100 per 5 minutes, aggregate by source IP, actino BLOCK |
+ | 1        |    AWSManagedRulesAmazonIPReputationList | Block known bad sources |
+ | 2        |    AWSManagedRulesCommonRuleSet          |  XSS, bad bots, size limits |
+ | 3        |    AWSManagedRulesKnownBadInputsRuleSet   | Log4j and similar |
+ | 4       |     AWSManagedRulesSQLiRuleSet              | SQL injection |
 
 
 Step 8: Private LLM path check
 
   The following are working correctly
-  Interface endpoints bedrock-runtime and lambda exist woth private DNS enabled, in both private subnets using sec-gw-endpoint-sg
+  Interface endpoints bedrock-runtime and lambda exist woth private DNS enabled, in both private subnets using sec-gw-endpoint-
+  
   DynamoDB gateway endpoint is attached to both private route tables
   private route tables have no 0.0.0.0/0
 
@@ -265,7 +286,9 @@ Step 8: Private LLM path check
 Step 9: Observability and alarms  
 
   Logs: API Gateway access logs, WAF logs, and the three Lambda log groups (retention to 14 days)
+  
   Alarms (CLoudwatch → Alarms), each notifying an SNS email topic
+  
       API Gateway 5XXError > o to 5 minutes
       WAF BlockedRequests > 20 for 5 minutes
       Lambda Errors on sec-gw-llm-gateway
