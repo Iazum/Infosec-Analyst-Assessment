@@ -117,6 +117,9 @@ The implementation will be validated through tests covering authenticated API ac
 The results, configuration screenshots and relevant logs will be documented as evidence for the assessment.
 
 
+
+PART 1D
+Rate Limiting: 
 ## Section 2: SECURITY OPERATIONS AND SDLC
 SIEM log onboarding and detections
 Secret scanning
