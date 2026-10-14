@@ -24,6 +24,7 @@ The design follows three principles: deny by default, defense in depth (multiple
 
 
 INBOUND REQUEST FLOW
+
 Client: Sends and HTTPS request with a JWT (Authorization header) and API key
 AWS WAF: Web ACL attached to the API Gateway stage inspects the request. AWS Managed Rules(Core, Known Bad inputs, IP reputation) and a rate based rule block malicious or abusive traffic with a 403 before it reaches the API
 API Gateway (REST) : Validates the request against the method's schema (400 if invalid) checks the API key against the usage plan
@@ -38,6 +39,7 @@ REST API and not HTTP API is used as AWS WAF can be associated directly with RES
 
 
 OUTBOUND AI REQUEST FLOW
+
 Summarize API Lambda: Receives an authorized request and forwards the text to the LLM gateway layer
 LLM gateway layer: Central control point for all AI traffic.. It applies inut validatoin, and size limits, PII redaction, model seclection and prompt loggin
 Secrets Manager: Holds any third party LLM credentials. Retreived at runtime through a VPC interface endpoint 
@@ -117,6 +119,7 @@ The DynamoDB prefix list appears in the destination dropdown as the gateway endp
 
 
 Step 4: Create the interface endpoints
+
 VPC → Endpoints → Create endpoint (type Interface), once for each
   .com.amazonaws.<us-east-1>.bedrock-runtime
   .com.amazonaws.<us-east-1>.secretsmanager
@@ -134,6 +137,7 @@ Console → Amazon Bedrock → model catalog
 
 Part 1b IMPLEMENTATION PLAN
 Step 1 DYNAMODB TABLES
+
 Console → DynamoDB → Create table ( two tables with on demand capacity)
 
 Table        Partition Key      Sort Key            Purpose
@@ -145,12 +149,14 @@ For both tables, KMS encryption is enabled as AWS managed key. On Orders table, 
 
 
 Step 2: IAM Roles (least privilege)
+
 Console → IAM → Roles → Create role → AWS services service → Lambda
 3 roles are created
 AWS Managed policy,  AWS LambdaVPCAcessExecutionRole is attached to each (they provide loggin and VPC network interface permissions
 
 
 Step 3 LAMBDA FUNCTIONS
+
 Console → Lambda → Create function → Author from scratch, Python3.12 3 functions are created with their codes
 
 Function            Code file                                 Role                      Timeout        Environment variables
@@ -161,6 +167,7 @@ sec-gw-summarize    apis/summarize/lambda_function.py        sec-gw-summarize-ro
 Bedrock model: a text model is picked (zai.glm-5.3) and a quick test is done
 
 Step 4: COGNITO USER POOL
+
 Console → Cognito → Create user pool
   Sign in identifier: Email
   Password policy: Cognito defaults (min 8, mixed character types)
@@ -173,6 +180,7 @@ Console → Cognito → Create user pool
 
 
 Step 5: API GATEWAY (REST API)
+
 Console → API Gateway → Create API → REST API (not private) → name sec-gw-api, endpoint type REGIONAL
 
 Authorizer. Authorizers → Create authrozer: type Cognito, user pool is selected, token source Authorization. (Test with Id token to confirm it validates)
@@ -196,6 +204,7 @@ Deploy: Deploy API → new stage prod, INstage detials → Logs and tracing; Acc
 
 
 Stage 6: USAGE PLAN AND API KEY
+
 API Gateway → Usage plans → create usage plan sec-gw-standard
 
   Throttling: rate 2 req/s, burst 5
@@ -205,6 +214,7 @@ API Gateway → Usage plans → create usage plan sec-gw-standard
 
 
 Stage 7 : AWS WAF
+
 Console → WAF & Shield → Web ACLs → Create a Web ACL
   Resource type: Regional, same reqion as the API
   Associate to sec-gw-api → stage prod
@@ -220,6 +230,7 @@ Console → WAF & Shield → Web ACLs → Create a Web ACL
 
 
 Step 8: Private LLM path check
+
   The following are working correctly
   Interface endpoints bedrock-runtime and lambda exist woth private DNS enabled, in both private subnets using sec-gw-endpoint-sg
   DynamoDB gateway endpoint is attached to both private route tables
@@ -227,6 +238,7 @@ Step 8: Private LLM path check
 
 
 Step 9: Observability and alarms  
+
   Logs: API Gateway access logs, WAF logs, and the three Lambda log groups (retention to 14 days)
   Alarms (CLoudwatch → Alarms), each notifying an SNS email topic
       API Gateway 5XXError > o to 5 minutes
@@ -236,5 +248,6 @@ Step 9: Observability and alarms
 
 
 Steps 10: Test, capture evidence, 
+
 1. run_tests.sh is uploaded to cloud shell
 2. the bash script is run and results recorded
