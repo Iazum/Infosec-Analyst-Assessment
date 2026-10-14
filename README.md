@@ -17,8 +17,10 @@ Overview:
 The organization needs a single, hardened entry  point for all API traffic and a controlled path for sending data to Enterprise LLMs. The design delievrs both on AWS using managed services
 
   Inbound: every request passes through AWS WAF before reaching Amazon PI Gateway, where it is authenticated, validated, and throttled, then handled by Lambda functions that persis data in DynamoDB
+  
   Outbound AI: Lambda functions run in private subnets with no internet route. 
                 Calls to the LLM go through a dedicated LLM gateway layer and then to Amazon BEdrock over VPC interface endpoint, so prompts and responses never traverse the public internet
+                
   Cross-cutting: KMS encryption, Sectes Manager, least-privilege IAM, and centralized logging ( CloudWatch, CloudTrail)
 
 
@@ -60,31 +62,40 @@ Amazon Bedrock: Runs the foundation model
 
 Egress Control: The private subnets have no NAT gateway and no route  to an Internet gateway. The lambda security group permits only outbound TCP 443 to the endpoint security group and the DynamoDB prefix list
 
-Network design
+NETWORK DESIGN
 
 VPC: 10.0.0.0/16, DNS hostnames and resolution enabled
+
 Subnets: 2 private subnets across 2 availability zones
+
 Internet access None
+
 Gateway Endpoint: DynamoDB 
+
 Interface endpoints
+
 Security groups
 
 Data Layer
 
   DynamoDB with on demand capacity, encryption ate rest using KMS
+  
   Access only through Lambda execution role
+  
   No direct public access: reachable via gateway endpoint
+  
   Sensitive data in transut and rest and encrypted
 
 
 Design Decisions
-Decision                  Recommended Choice                          Reason to state
-API type                  REST API                                    WAF attaches directly to REST stages
-Auth                      Cognito User Pool                           Managed, OIDC compliance, no custom code
-Database                  DynamoDB(KMS encrypted)                     Serverless, IAM controlled, reachable through vpc endpoint
-Compute                   Lambda in private subnet                    No public exposure, no servers to patch
-LLM                       Amazon Bedrock (via VPC endpoint)           Traffic never leaves AWS network
-Outbound proxy            Dedicated LLM gateway layer                 Central place for redaction, loggin, quotas and key custody
+
+| Decision |               |  Recommended Choice   |                     |  Reason to state |
+| API type    |            |  REST API  |                                 | WAF attaches directly to REST stages |
+| Auth |                    | Cognito User Pool  |                       |  Managed, OIDC compliance, no custom code |
+| Database |                 | DynamoDB(KMS encrypted) |                  |  Serverless, IAM controlled, reachable through vpc endpoint |
+| Compute  |                | Lambda in private subnet |                 |  No public exposure, no servers to patch |
+| LLM |                      | Amazon Bedrock (via VPC endpoint) |        |  Traffic never leaves AWS network |
+| Outbound proxy |           | Dedicated LLM gateway layer |               |  Central place for redaction, loggin, quotas and key custody |
 
 Phase 0
 1. Signining in and picking  a region (us-east-1)
