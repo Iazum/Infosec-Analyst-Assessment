@@ -89,13 +89,14 @@ Data Layer
 
 Design Decisions
 
-| Decision |               |  Recommended Choice   |                     |  Reason to state |
-| API type    |            |  REST API  |                                 | WAF attaches directly to REST stages |
-| Auth |                    | Cognito User Pool  |                       |  Managed, OIDC compliance, no custom code |
-| Database |                 | DynamoDB(KMS encrypted) |                  |  Serverless, IAM controlled, reachable through vpc endpoint |
-| Compute  |                | Lambda in private subnet |                 |  No public exposure, no servers to patch |
-| LLM |                      | Amazon Bedrock (via VPC endpoint) |        |  Traffic never leaves AWS network |
-| Outbound proxy |           | Dedicated LLM gateway layer |               |  Central place for redaction, loggin, quotas and key custody |
+| Decision |               Recommended Choice   |                     Reason to state |
+| --- | --- | --- |
+| API type              |  REST API  |                                  WAF attaches directly to REST stages |
+| Auth                | Cognito User Pool  |                         Managed, OIDC compliance, no custom code |
+| Database                  | DynamoDB(KMS encrypted) |                    Serverless, IAM controlled, reachable through vpc endpoint |
+| Compute                  | Lambda in private subnet |                   No public exposure, no servers to patch |
+| LLM                       | Amazon Bedrock (via VPC endpoint) |          Traffic never leaves AWS network |
+| Outbound proxy            | Dedicated LLM gateway layer |                 Central place for redaction, loggin, quotas and key custody |
 
 Phase 0
 1. Signining in and picking  a region (us-east-1)
