@@ -13,7 +13,9 @@ Data: Synthetic test data only
 
 Architecture description
 Overview: 
+
 The organization needs a single, hardened entry  point for all API traffic and a controlled path for sending data to Enterprise LLMs. The design delievrs both on AWS using managed services
+
   Inbound: every request passes through AWS WAF before reaching Amazon PI Gateway, where it is authenticated, validated, and throttled, then handled by Lambda functions that persis data in DynamoDB
   Outbound AI: Lambda functions run in private subnets with no internet route. 
                 Calls to the LLM go through a dedicated LLM gateway layer and then to Amazon BEdrock over VPC interface endpoint, so prompts and responses never traverse the public internet
@@ -26,10 +28,15 @@ The design follows three principles: deny by default, defense in depth (multiple
 INBOUND REQUEST FLOW
 
 Client: Sends and HTTPS request with a JWT (Authorization header) and API key
+
 AWS WAF: Web ACL attached to the API Gateway stage inspects the request. AWS Managed Rules(Core, Known Bad inputs, IP reputation) and a rate based rule block malicious or abusive traffic with a 403 before it reaches the API
+
 API Gateway (REST) : Validates the request against the method's schema (400 if invalid) checks the API key against the usage plan
+
 Cognito: Verifies the JWT signature, issurer, expiry, and audience against the Cognito User Pool. Missingor invlid tokens receive 401
+
 Lambda (in VPC): An authorized request invokes the function under a least-privilege execution role
+
 DynamoDB: Lambda reads or writes through a VPC gateway endpoint, so traffic stays  on the AWS network. Data is encrypted at rest with KMS
 
 
@@ -41,15 +48,20 @@ REST API and not HTTP API is used as AWS WAF can be associated directly with RES
 OUTBOUND AI REQUEST FLOW
 
 Summarize API Lambda: Receives an authorized request and forwards the text to the LLM gateway layer
-LLM gateway layer: Central control point for all AI traffic.. It applies inut validatoin, and size limits, PII redaction, model seclection and prompt loggin
+
+LLM gateway layer: Central control point for all AI traffic.. It applies inut validatoin, and size limits, PII redaction, model seclection and prompt logging
+
 Secrets Manager: Holds any third party LLM credentials. Retreived at runtime through a VPC interface endpoint 
+
 Bedrock VPC interface endpoint: Private connection to Amazon BEdrock with private DNS enabled
+
 Amazon Bedrock: Runs the foundation model
 
 
 Egress Control: The private subnets have no NAT gateway and no route  to an Internet gateway. The lambda security group permits only outbound TCP 443 to the endpoint security group and the DynamoDB prefix list
 
 Network design
+
 VPC: 10.0.0.0/16, DNS hostnames and resolution enabled
 Subnets: 2 private subnets across 2 availability zones
 Internet access None
@@ -58,6 +70,7 @@ Interface endpoints
 Security groups
 
 Data Layer
+
   DynamoDB with on demand capacity, encryption ate rest using KMS
   Access only through Lambda execution role
   No direct public access: reachable via gateway endpoint
