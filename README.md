@@ -1,4 +1,3 @@
-<img width="2514" height="1365" alt="private-route-table" src="https://github.com/user-attachments/assets/22820873-a66d-4e38-9ee4-3f37af71ce68" /><img width="2519" height="1360" alt="dynamodb-tables" src="https://github.com/user-attachments/assets/ea70f517-47ba-45b1-b516-fa50fd657f01" /># Infosec-Analyst-Assessment
 
 ## Objective
 Demonstrate secure API architecture, AI guardrails, application security testing, SIEM monitoring and incident response
@@ -130,7 +129,6 @@ For each, both private subnets are selected, sec-gw-endpoint-sg is attached and 
 Step 5: Check Bedrock access
 Console → Amazon Bedrock → model catalog
 
-Step 6
 
 
 
