@@ -299,3 +299,221 @@ Steps 10: Test, capture evidence,
 
 1. run_tests.sh is uploaded to cloud shell
 2. the bash script is run and results recorded
+
+
+
+
+
+PART C : SAMPLE APIS
+
+| API | Method and path | Backend | Auth |
+| --- | --- | --- | --- | 
+| Orders | POST / orders | sec-gw-orders → DynamoDB Orders | JWT + API KEy |
+| Orders | GET / orders, GET /orders/{orderId} | sec-gw-orders → DynamoDB Orders | JWT + API KEy
+| AI summarize | POST /ai/summarize | 	sec-gw-summarize → sec-gw-llm-gateway → Bedrock | JWT + APT Key
+
+What each API demonstrates
+  Orders: authenticated CRUD with per user data isolation (userId comes from verified JWT, never from client input), JSON schema request validation, and least priviliege DynamoDB access
+  AI summarize: the outbound AI pattern from the architecture: input limits, PII redaction, per user dailty quota (HTTP 429), metadata pnly audit loggin, private connectivity tp Bedrock, and prompt injection aware system prompt
+
+
+PART D: RATE LIMITING, AUTHENTICATION AND SECURE DATA HANDLING
+
+API rate limiting
+
+Reason for rate limiting
+
+It protectes availability ( abuse, scraping) cost (every LLM call and Lambda invocation is billed) and security (brute force and credential stuffing attempts)
+
+
+Design Rationale
+  Ip based limits (WAF) catch unauthenticated abuse, but since IPs are shared, the limits guards against floods
+  
+  Key based limits (usage plan) identify the calling application. They give predictable fair use between client teams and the ability to revoke or tier a single client without affecting others
+  
+  User based limits ( LLM gateway) per person controls
+  
+  Token bucket behavior: API gateway allows short bursts up to the burst size and then enforces steady ready
+
+
+Authentication and authorization strategies
+
+Principles
+1. Authenticate every request
+
+2. Use the right mechanism for each kind of caller
+
+3. Authorize on the server, using verified identity only
+
+API keys are not authenticated since thery are shared secrets with no user identity, no expiry by default and are easily leaked in logs or repos
+
+How JWT flow works
+
+1. The user signs in against COgnito and receives an ID token, access token, and refresh token
+
+2. The client sends the token in the Authorization header
+
+3. The cognito authorizer validates the signature against the pool's public key, the issuer, the expiry and the token use
+
+4. The verified clains (including sub) are passwd to Lambda in the request context
+
+5. The orders API uses sub as the partition key, so a user can only ever quesry their own records preventing  brocken object level authorization, the top item in  the OWASP API security Top 10)
+
+Token and session hygiene
+
+Short lived access token (60 minutes)
+MFA
+Self  registration is disabled so acounts are created by an administrator
+Passwords handled only by Cognito
+Tokens are never logged
+
+
+Secure data handling
+
+Data in transit
+
+  TLS 1.2 or higher for all client traffic (API Gateway enforces HTTPS
+  Traffic from Lambda to DynamoDB and BEdrock travels over VPC endpoints, on the AWS network
+  Private subnets have no internet route 
+
+
+Data at rest
+  DynamoDB encrypted with KMS, point in time recovery enabled on Orders
+  CloudWatch Logs, secrets and any S3 log buckets encrypted with KMS
+
+
+Secrets Management
+
+  No secrets in source code, environment variabled or repository
+  Secrets Manager stores any third party credentials with automatic rotation
+  Bedrock needs no API key: acess is through Lambda's IAM role, which removes a whole class of leaked credntial risk
+  The test script  reads credentials from environment variables and published output is redacted
+
+PART E: HOW TO CONFIGURE API GATEWAY/ PROXY TO ENFORCE AI INPUT/OUTPUT GUARDRAILS
+
+Decision: 
+
+API Gateway and WAF handle structure, identity, and volume. The LLM gateway is the single policy enforcement point for AI content, because it is the only component that sees both directions of the conversation
+
+Amazon Bedrock Quardrails provides content filters, sensitive information filters (PII) and denied topics. 
+
+Its ApplyGuardrail API evaluates text independently of any model call, so the same guardrail can screen the input before the model and the output after it and it works for non Bedrock models
+CONFIGURATION: PHI DETECTION WITH AMAZON COMPREHEND MEDICAL
+
+Where PHI is a legal concern (for example under HIPAA) a detective detector is added in front of the model
+
+NETWORK LEVEL PHI PROTECTION (defence in depth) Text filters can miss things, so the network design will limit what can leave
+  Private subnets with no internet route
+  VPC  endpoint policies limiting which Bedrock actions and resources
+
+
+
+MAKING THE QUARDRAIL NON BYPASSABLE
+
+1. Single path: only the gateway Lambda's role is allowed to call model APIs
+2. Enforcement of  Guardrail use in IAM: Bedrock supports an IAM condition key that can require a specific guardrail on model invocations, so code change that skips guardrail is denied by AWS itself
+3. Service control policy at the organization level, denies model invocation from any role except the gateway role
+4. Network: no internet route from the application tier so a rogue process cannot call an external model API directly
+5. Version pinning: reference a numbered quardrail version and alert on changes through CloudTrail events
+
+Prompt Injection: defence in depth
+| Layer | Control | 
+| --- | --- |
+| Detection | Guardrails prompt attack filter and simple heuristics logged as signals |
+| Prompt design | System prompt states that user text is untrusted data; user content is clearly delimited |
+| Least privilege | The model only returns text; lacks tools, credentials and ability to call internal APIs, which limits the blast radius of a successful injection |
+| Output validation | Output length and format checks, system prompt leakage checks, response filtered before running | 
+| Indirect injection | scanning of documents or web content added with the same guardrails and require human confirmation for any action with side effects | 
+| Monitoring | Alarms on spikes in blocked prompt attacks per user and feed repeat offenders into stricter throttling | 
+
+
+
+TRADEOFFS
+
+Latency: each guradrail calls adds time, so the gateway Lambda timeout and API gateway defauly 29 second integration limit must allow for it
+
+Streaming: output guardrails need the text to inspect, so token by token streaming either waits for chunks to be checked or disabled
+
+Cost: guardrails and comprehend medical are billed per text unit or character
+
+False positives or false negatives: strictness is a business decision, For PHI, blocking is favoured, for general PII, anonymization of users is favoured
+
+Utility vs privacy: anonymizing input can lower answer quality
+
+
+PART F: TECHNICAL RISKS AND MITIGATION
+
+Risk Register
+
+Likelihood (L), and Impact (I) are rated High / Medium / Low for this architecture
+
+Security risks
+
+| ID | Risks | L | I | Mitigation | Detection | 
+
+| --- | --- | --- | --- | --- | --- |
+
+| S1 | WAF False positives block legitimate traffic | M | M | Roll out Managed rules in count mode first, tune with sampled requests | WAF sampled requests, 403 rate alarm | 
+| S2 | WAF bypass or evasion | M | H | Layered controls, body size limits, managed rule updates, defence in depth rather than relying on WAF | Anomaly alarms periodic penetration tests | 
+| S3 | Broken object level authorization | M | H | Identity derived partition keys | Automated tests, access pattern loggin | 
+| S4 | Credential or token leakage | M | H | No static AWS keys, secrets manager, short token lifetimes, header redaction in logs, rotation of API Keys , secret scanning in repository | Git secret scanning, cloudtrail anomalies |
+| S5 | API key misused as authentication | L | M | key only throttling; JWT required for every route | Review of methods settings |
+| S6 | Over permissive IAM | M | H | Per function roles scoped to resource ARNS, IAM Access analyzer, periodic permission review | Access Analyzer findings, config rules | 
+| S7 | Compromised lambda or dependency | L | H | No internet egress, minimal dependencies, pinned versions | GuardDuty, VPC flow logs |
+
+
+AI specific risks
+
+| ID | Risks | L | I | Mitigation | Detection | 
+
+| --- | --- | --- | --- | --- | --- |
+
+| A1 | Prompt injection | H | M to H | Guardrail prompt attack filter | Prompt attack metric spikes | 
+| A2 | PII/PHI leakage to the model | M | H | Input and output filters, PHI block policy, private endpoints | Guardrails intervention metrics | 
+| A3 | Guradrail bypass or drift | L | H | IAM condition enforcing the guardrail | CloudTrail alarms | 
+| A4 | Hallucination | H | M | Label output as AI generated keep human review for decisions | User feedback, sampled quality review | 
+| A5 | Denial of wallet | M | H | Per user daily quota, throttles, input size cap | Budget and usage alarms | 
+| A6 | Vendor or model change | M | M | Model ID in configuration, abstraction in the gateway | Falling regression tests | 
+| A7 | Data residency  violation | L to M | H | Pin region, use region specific inference profiles | Config review, CloudTrail | 
+
+
+Availability and performance risks
+
+| ID | Risks | L | I | Mitigation | Detection | 
+
+| --- | --- | --- | --- | --- | --- |  
+| P1 | 	LLM or guardrail latency exceeds API Gateway's 29 s default limit | M | M | Cap input and output sizes, set timeouts below the gateway limit | Latency alarms |
+| P2 | 	Bedrock throttling or quota limits | M | M | Request quota increases, retry with exponential backoff and jitter | Throttle metrics | 
+| P3 | Fail closed guardrails | M | M | Health alarms retries on transient errors | Error rate alarms | 
+| P4 | Lambda in VPC coled starts | M | L | Provisioned concurrency for latency, sensitive routes | Init duration metrics |
+| P5 | Single region failure | L | H | Multi region active passive with route 53 failover, DynamoDB global tables | Health checks | 
+| P6 | DynamoDB hot partition or throttling | L | M | On demand capacity, well distributed keys | Throttle metrics |
+| P7 | Single gateway as bottleneck | L | M | Lambda scales automatically reserved concurrency to protect downstreams | Concurrency metrics | 
+
+
+Operational and compliance risks
+
+| ID | Risks | L | I | Mitigation | Detection | 
+
+| --- | --- | --- | --- | --- | --- | 
+| O1 | Console built infrastructure drifts | H | M | Export to IaC, move to Terraform | Cloudformation drift reports | 
+| O2 | Sensitive data in logs | M | H | Metadata only logging, header redaction, log encryption, short retention | Periodic log review | 
+| O3 | Alert fatigue | M | M | 	Few high-signal alarms with owners and runbooks | Incident reviews| 
+| O4 | Unexpected cost | M | M | Budgets and alarms, tear down demo resources | Billing alarms | 
+| O5 | Regulatory exposure | M | H | Data classification, approved use policy | Compliance audits | 
+| O6 | Insufficient response | M | H | Written runbooks, ability to disable a user or API key quickly | Game days
+
+
+
+Top risks and priority actions
+1. Data leakage; highest impact. Prioritize input and output guardrails
+2. Authorization and credential failures: Priority of identity driven access, least privilege IAM, and secrets handling
+3. Prompt injection; limitation of what a successful injection can do
+4. Cost and availability: quotas, budgets, timeouts
+5. Operational maturity: Infrastructure as code, runbooks and tested response
+
+
+
+
+
+
