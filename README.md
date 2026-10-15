@@ -89,7 +89,7 @@ Data Layer
 
 Design Decisions
 
-| Decision |               Recommended Choice   |                     Reason to state |
+| Decision |             Recommended Choice   |                     Reason to state |
 | --- | --- | --- |
 | API type              |  REST API  |                                  WAF attaches directly to REST stages |
 | Auth                | Cognito User Pool  |                         Managed, OIDC compliance, no custom code |
