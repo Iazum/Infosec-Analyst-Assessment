@@ -450,7 +450,6 @@ Likelihood (L), and Impact (I) are rated High / Medium / Low for this architectu
 Security risks
 
 | ID | Risks | L | I | Mitigation | Detection | 
-
 | --- | --- | --- | --- | --- | --- |
 
 | S1 | WAF False positives block legitimate traffic | M | M | Roll out Managed rules in count mode first, tune with sampled requests | WAF sampled requests, 403 rate alarm | 
@@ -465,7 +464,6 @@ Security risks
 AI specific risks
 
 | ID | Risks | L | I | Mitigation | Detection | 
-
 | --- | --- | --- | --- | --- | --- |
 
 | A1 | Prompt injection | H | M to H | Guardrail prompt attack filter | Prompt attack metric spikes | 
@@ -480,7 +478,6 @@ AI specific risks
 Availability and performance risks
 
 | ID | Risks | L | I | Mitigation | Detection | 
-
 | --- | --- | --- | --- | --- | --- |  
 | P1 | 	LLM or guardrail latency exceeds API Gateway's 29 s default limit | M | M | Cap input and output sizes, set timeouts below the gateway limit | Latency alarms |
 | P2 | 	Bedrock throttling or quota limits | M | M | Request quota increases, retry with exponential backoff and jitter | Throttle metrics | 
@@ -492,7 +489,6 @@ Availability and performance risks
 
 
 Operational and compliance risks
-
 | ID | Risks | L | I | Mitigation | Detection | 
 
 | --- | --- | --- | --- | --- | --- | 
