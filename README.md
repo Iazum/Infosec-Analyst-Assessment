@@ -451,7 +451,6 @@ Security risks
 
 | ID | Risks | L | I | Mitigation | Detection | 
 | --- | --- | --- | --- | --- | --- |
-
 | S1 | WAF False positives block legitimate traffic | M | M | Roll out Managed rules in count mode first, tune with sampled requests | WAF sampled requests, 403 rate alarm | 
 | S2 | WAF bypass or evasion | M | H | Layered controls, body size limits, managed rule updates, defence in depth rather than relying on WAF | Anomaly alarms periodic penetration tests | 
 | S3 | Broken object level authorization | M | H | Identity derived partition keys | Automated tests, access pattern loggin | 
@@ -465,7 +464,6 @@ AI specific risks
 
 | ID | Risks | L | I | Mitigation | Detection | 
 | --- | --- | --- | --- | --- | --- |
-
 | A1 | Prompt injection | H | M to H | Guardrail prompt attack filter | Prompt attack metric spikes | 
 | A2 | PII/PHI leakage to the model | M | H | Input and output filters, PHI block policy, private endpoints | Guardrails intervention metrics | 
 | A3 | Guradrail bypass or drift | L | H | IAM condition enforcing the guardrail | CloudTrail alarms | 
@@ -490,7 +488,6 @@ Availability and performance risks
 
 Operational and compliance risks
 | ID | Risks | L | I | Mitigation | Detection | 
-
 | --- | --- | --- | --- | --- | --- | 
 | O1 | Console built infrastructure drifts | H | M | Export to IaC, move to Terraform | Cloudformation drift reports | 
 | O2 | Sensitive data in logs | M | H | Metadata only logging, header redaction, log encryption, short retention | Periodic log review | 
